@@ -2,6 +2,7 @@ import os
 import random
 import sqlite3
 import logging
+from collections import Counter
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
@@ -25,7 +26,7 @@ PRIZES = [
     "скидка 2 рубля", "скидка 2 рубля", "скидка 2 рубля", "скидка 2 рубля", "скидка 2 рубля",
     "скидка 2 рубля", "скидка 2 рубля", "скидка 2 рубля", "скидка 2 рубля", "скидка 2 рубля",
     "бесплатная банка", "бесплатная банка", "бесплатный картридж", "бесплатный картридж", "бесплатная банка и картридж"
-]
+] PRIZE_COUNTS = Counter(PRIZES)
 
 
 def connect_db():
@@ -133,10 +134,14 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 return
 
-            used_prizes = {
-                row[0] for row in db.execute("SELECT prize FROM claims").fetchall()
-            }
-            available_prizes = [p for p in PRIZES if p not in used_prizes]
+            used_prizes = Counter(
+    row[0] for row in db.execute("SELECT prize FROM claims").fetchall()
+)
+
+available_prizes = [
+    p for p in PRIZES
+    if used_prizes[p] < PRIZE_COUNTS[p]
+]
 
             if not available_prizes:
                 db.rollback()
