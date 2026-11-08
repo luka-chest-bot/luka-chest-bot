@@ -139,11 +139,11 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
             used_prizes = Counter(
     row[0] for row in db.execute("SELECT prize FROM claims").fetchall()
 )
-
-available_prizes = [
-    p for p in PRIZES
-    if used_prizes[p] < PRIZE_COUNTS[p]
-]
+            
+            available_prizes = [
+              p for p in PRIZES
+              if used_prizes[p] < PRIZE_COUNTS[p]
+            ]
 
             if not available_prizes:
                 db.rollback()
