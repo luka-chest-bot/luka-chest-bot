@@ -130,7 +130,7 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 (chest_id,),
             ).fetchone()
 
-            if chest_taken:
+                        if chest_taken:
                 db.rollback()
                 await query.edit_message_text(
                     "Этот сундук уже открыли. Выберите другой:",
@@ -139,11 +139,11 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
 
             used_prizes = Counter(
-    row[0] for row in db.execute("SELECT prize FROM claims").fetchall()
-)
+                row[0] for row in db.execute("SELECT prize FROM claims").fetchall()
+            )
             
             available_prizes = [
-              p for p in PRIZES
+              p for p in PRIZE_COUNTS.elements()  # безопасный обход с учетом количества
               if used_prizes[p] < PRIZE_COUNTS[p]
             ]
 
@@ -182,7 +182,6 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     except Exception:
         logging.exception("Не получилось отправить уведомление администратору")
-
 
 class HealthHandler(BaseHTTPRequestHandler):
     def do_GET(self):
