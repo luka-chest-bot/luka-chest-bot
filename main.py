@@ -39,15 +39,15 @@ def connect_db():
 
 def init_db():
     with connect_db() as db:
-        db.execute("""
-            CREATE TABLE IF NOT EXISTS claims (
-                user_id INTEGER PRIMARY KEY,
-                username TEXT,
-                chest_id INTEGER UNIQUE,
-                prize TEXT NOT NULL
-            )
-        """)
-
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS claims (
+            user_id INTEGER PRIMARY KEY,
+            username TEXT,
+            chest_id INTEGER,
+            prize TEXT
+        )
+    """)
+    db.commit()
 
 def make_keyboard():
     with connect_db() as db:
