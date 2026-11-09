@@ -219,5 +219,3 @@ def main():
     logging.info("Telegram bot is starting...")
     app.run_polling()
 
-if __name__ == "__main__":
-    main()
