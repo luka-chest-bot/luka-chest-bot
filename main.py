@@ -39,7 +39,7 @@ def connect_db():
 
 def init_db():
     with connect_db() as db:
-    db.execute("""
+        db.execute("""
         CREATE TABLE IF NOT EXISTS claims (
             user_id INTEGER PRIMARY KEY,
             username TEXT,
