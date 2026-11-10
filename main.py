@@ -130,7 +130,7 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 (chest_id,),
             ).fetchone()
 
-                        if chest_taken:
+            if chest_taken:
                 db.rollback()
                 await query.edit_message_text(
                     "Этот сундук уже открыли. Выберите другой:",
