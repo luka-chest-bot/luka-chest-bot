@@ -126,9 +126,9 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
 
             chest_taken = db.execute(
-                "SELECT 1 FROM claims WHERE chest_id = ?",
-                (chest_id,),
-            ).fetchone()
+    "SELECT 1 FROM claims WHERE user_id = ? AND chest_id = ?",
+    (user.id, chest_id),
+).fetchone()
 
             if chest_taken:
                 db.rollback()
