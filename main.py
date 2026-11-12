@@ -50,28 +50,19 @@ def init_db():
     db.commit()
 
 def make_keyboard():
-    with connect_db() as db:
-        opened = {
-            row[0] for row in db.execute("SELECT chest_id FROM claims").fetchall()
-        }
-
     buttons = []
-    for chest_id in range(1, 26):
-        if chest_id in opened:
-            text = "🔒"
-            callback_data = "taken"
-        else:
-            text = f"🎁 {chest_id}"
-            callback_data = f"open:{chest_id}"
 
+    for chest_id in range(1, 26):
         buttons.append(
-            InlineKeyboardButton(text, callback_data=callback_data)
+            InlineKeyboardButton(
+                f"🎁 {chest_id}",
+                callback_data=f"open:{chest_id}",
+            )
         )
 
     return InlineKeyboardMarkup([
         buttons[i:i + 5] for i in range(0, 25, 5)
     ])
-
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     with connect_db() as db:
