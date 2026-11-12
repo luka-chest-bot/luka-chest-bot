@@ -55,7 +55,7 @@ def make_keyboard():
     for chest_id in range(1, 26):
         buttons.append(
             InlineKeyboardButton(
-                f"🎁 {chest_id}",
+                f"🪎 {chest_id}",
                 callback_data=f"open:{chest_id}",
             )
         )
