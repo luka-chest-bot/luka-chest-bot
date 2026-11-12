@@ -112,18 +112,18 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 return
 
-            chest_taken = db.execute(
-    "SELECT 1 FROM claims WHERE user_id = ? AND chest_id = ?",
-    (user.id, chest_id),
+            already_opened = db.execute(
+    "SELECT chest_id, prize FROM claims WHERE user_id = ?",
+    (user.id,),
 ).fetchone()
 
-            if chest_taken:
-                db.rollback()
-                await query.edit_message_text(
-                    "Этот сундук уже открыли. Выберите другой:",
-                    reply_markup=make_keyboard(),
-                )
-                return
+if already_opened:
+    db.rollback()
+    await query.edit_message_text(
+        f"Вы уже открыли сундук №{already_opened[0]}. "
+        f"Ваш приз: {already_opened[1]}"
+    )
+    return
 
             used_prizes = Counter(
                 row[0] for row in db.execute("SELECT prize FROM claims").fetchall()
