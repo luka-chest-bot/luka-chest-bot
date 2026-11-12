@@ -87,10 +87,6 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    if query.data == "taken":
-        await query.answer("Этот сундук уже открыт.", show_alert=True)
-        return
-
     if not query.data.startswith("open:"):
         return
 
