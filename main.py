@@ -184,8 +184,6 @@ def start_web_server():
 
 def main():
     init_db()
-    if os.path.exists("chests.db"):
-    os.remove("chests.db")
     start_web_server()
 
     app = Application.builder().token(BOT_TOKEN).build()
