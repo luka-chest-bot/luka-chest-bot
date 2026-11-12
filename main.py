@@ -209,6 +209,8 @@ def start_web_server():
     ).start()
 
 def main():
+    if os.path.exists("chests.db"):
+    os.remove("chests.db")
     init_db()
     start_web_server()
 
