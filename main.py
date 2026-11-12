@@ -1,7 +1,4 @@
-import os
-import random
-import sqlite3
-import logging
+
 from collections import Counter
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
