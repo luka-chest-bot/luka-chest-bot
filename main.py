@@ -1,203 +1,190 @@
 import os
-import random
 import sqlite3
-import logging
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO,
-)
+from pathlib import Path
 
-logger = logging.getLogger(__name__)
-from collections import Counter
-import threading
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.ext import (
-    Application,
-    CallbackQueryHandler,
-    CommandHandler,
-    ContextTypes,
-)
-
-logging.basicConfig(level=logging.INFO)
-
-BOT_TOKEN = os.environ["BOT_TOKEN"]
-ADMIN_ID = 8103392209
-DB_PATH = os.environ.get("DB_PATH", "chests.db")
-
-# Замените названия на реальные призы.
-# Каждый элемент — один приз; всего их должно быть 25.
-PRIZES = [
-    "скидка 5 рублей", "скидка 5 рублей", "скидка 2 рубля", "скидка 5 рублей", "скидка 3 рубля",
-    "скидка 3 рубля", "скидка 3 рубля", "скидка 3 рубля", "скидка 3 рубля", "скидка 2 рубля",
-    "скидка 2 рубля", "скидка 2 рубля", "скидка 2 рубля", "скидка 2 рубля", "скидка 2 рубля",
-    "скидка 2 рубля", "скидка 2 рубля", "скидка 2 рубля", "скидка 2 рубля", "скидка 2 рубля",
-    "скидка 3 рубля", "скидка 3 рубля", "скидка 3 рубля", "скидка 3 рубля", "бесплатная банка и картридж"
-] 
-
-PRIZE_COUNTS = Counter(PRIZES)
+import requests
+from flask import Flask, jsonify, request, send_from_directory
 
 
-def connect_db():
-    return sqlite3.connect(DB_PATH, timeout=30)
+BASE_DIR = Path(__file__).resolve().parent
+DATA_DIR = Path(os.getenv("DATA_DIR", str(BASE_DIR / "data")))
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+DB_PATH = DATA_DIR / "chests.db"
+BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
+ADMIN_ID = int(os.getenv("ADMIN_ID", "8103392209"))
+WEBAPP_URL = os.getenv(
+    "WEBAPP_URL",
+    "https://luka-chest-bot.onrender.com",
+).rstrip("/")
+
+app = Flask(__name__, static_folder="static", static_url_path="")
+
+
+def get_db():
+    connection = sqlite3.connect(DB_PATH)
+    connection.row_factory = sqlite3.Row
+    return connection
 
 
 def init_db():
-    with connect_db() as db:
-        db.execute("""
-        CREATE TABLE IF NOT EXISTS claims (
-            user_id INTEGER PRIMARY KEY,
-            username TEXT,
-            chest_id INTEGER,
-            prize TEXT
-        )
-    """)
-    db.commit()
-
-def make_keyboard():
-    buttons = []
-
-    for chest_id in range(1, 26):
-        buttons.append(
-            InlineKeyboardButton(
-                f"🪎 {chest_id}",
-                callback_data=f"open:{chest_id}",
+    with get_db() as connection:
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                telegram_id INTEGER PRIMARY KEY,
+                username TEXT,
+                first_name TEXT,
+                chest_number INTEGER,
+                prize TEXT,
+                is_blocked INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
+            """
         )
 
-    return InlineKeyboardMarkup([
-        buttons[i:i + 5] for i in range(0, 25, 5)
-    ])
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    with connect_db() as db:
-        existing = db.execute(
-            "SELECT chest_id, prize FROM claims WHERE user_id = ?",
-            (update.effective_user.id,),
-        ).fetchone()
-
-    if existing:
-        await update.message.reply_text(
-            f"Вы уже открыли сундук №{existing[0]}. Ваш приз: {existing[1]}"
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS chests (
+                number INTEGER PRIMARY KEY,
+                image_path TEXT,
+                prize TEXT NOT NULL DEFAULT ''
+            )
+            """
         )
-        return
 
-    await update.message.reply_text(
-        "Выберите один свободный сундук. Открыть можно только один раз:",
-        reply_markup=make_keyboard(),
+        existing = connection.execute(
+            "SELECT COUNT(*) AS count FROM chests"
+        ).fetchone()["count"]
+
+        if existing == 0:
+            connection.executemany(
+                "INSERT INTO chests (number, prize) VALUES (?, ?)",
+                [(number, "") for number in range(1, 26)],
+            )
+
+
+def telegram_request(method, payload=None):
+    if not BOT_TOKEN:
+        return None
+
+    response = requests.post(
+        f"https://api.telegram.org/bot{BOT_TOKEN}/{method}",
+        json=payload or {},
+        timeout=20,
     )
+    response.raise_for_status()
+    return response.json()
 
 
-async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-
-    if not query.data.startswith("open:"):
+def set_webhook():
+    if not BOT_TOKEN:
+        print("BOT_TOKEN is not configured")
         return
 
-    chest_id = int(query.data.split(":")[1])
-    user = query.from_user
-    username = f"@{user.username}" if user.username else user.full_name
+    webhook_url = f"{WEBAPP_URL}/telegram/webhook"
 
     try:
-        with connect_db() as db:
-            # Защищает от одновременных нажатий на один сундук.
-            db.execute("BEGIN IMMEDIATE")
-
-            already_opened = db.execute(
-                "SELECT chest_id, prize FROM claims WHERE user_id = ?",
-                (user.id,),
-            ).fetchone()
-
-            if already_opened:
-                db.rollback()
-                await query.edit_message_text(
-                    f"Вы уже открыли сундук №{already_opened[0]}. "
-                    f"Ваш приз: {already_opened[1]}"
-                )
-                return
-
-            used_prizes = Counter(
-                row[0] for row in db.execute("SELECT prize FROM claims").fetchall()
-            )
-            
-            available_prizes = [
-              p for p in PRIZE_COUNTS.elements()  # безопасный обход с учетом количества
-              if used_prizes[p] < PRIZE_COUNTS[p]
-            ]
-
-            if not available_prizes:
-                db.rollback()
-                await query.edit_message_text("Все призы уже разобраны.")
-                return
-
-            prize = random.choice(available_prizes)
-            db.execute(
-                "INSERT INTO claims (user_id, username, chest_id, prize) "
-                "VALUES (?, ?, ?, ?)",
-                (user.id, username, chest_id, prize),
-            )
-            db.commit()
-
-    except sqlite3.IntegrityError:
-        await query.edit_message_text(
-            "Не удалось открыть этот сундук. Нажмите /start и выберите свободный."
+        result = telegram_request(
+            "setWebhook",
+            {
+                "url": webhook_url,
+                "allowed_updates": ["message"],
+            },
         )
-        return
+        print("Telegram webhook:", result)
+    except requests.RequestException as error:
+        print("Webhook setup failed:", error)
 
-    await query.edit_message_text(
-        f"🎉 Вы открыли сундук №{chest_id}!\nВаш приз: {prize}"
-    )
 
-    try:
-        await context.bot.send_message(
-            chat_id=ADMIN_ID,
-            text=(
-                f"Открыт сундук №{chest_id}\n"
-                f"Участник: {username}\n"
-                f"Telegram ID: {user.id}\n"
-                f"Приз: {prize}"
+def send_start_message(chat_id, first_name=""):
+    greeting = f"Привет, {first_name}!" if first_name else "Привет!"
+
+    telegram_request(
+        "sendMessage",
+        {
+            "chat_id": chat_id,
+            "text": (
+                f"{greeting}\n\n"
+                "Открой игру и выбери один из 25 сундуков."
             ),
-        )
-    except Exception:
-        logging.exception("Не получилось отправить уведомление администратору")
-
-class HealthHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.send_header("Content-Type", "text/plain; charset=utf-8")
-        self.end_headers()
-        self.wfile.write(b"Bot is running!")
-
-    def log_message(self, format, *args):
-        pass
-
-def start_web_server():
-    port = int(os.environ.get("PORT", 10000))
-
-    server = ThreadingHTTPServer(
-        ("0.0.0.0", port),
-        HealthHandler,
+            "reply_markup": {
+                "keyboard": [
+                    [
+                        {
+                            "text": "🎁 Открыть сундуки",
+                            "web_app": {"url": WEBAPP_URL},
+                        }
+                    ]
+                ],
+                "resize_keyboard": True,
+            },
+        },
     )
 
-    logging.info("HTTP server started on port %s", port)
 
-    threading.Thread(
-        target=server.serve_forever,
-        daemon=True,
-    ).start()
+@app.get("/")
+def index():
+    index_file = Path(app.static_folder) / "index.html"
 
-def main():    
-    init_db()
-    start_web_server()
+    if index_file.exists():
+        return send_from_directory(app.static_folder, "index.html")
 
-    app = Application.builder().token(BOT_TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(button_click))
+    return (
+        "Сервер работает. Игровая страница будет добавлена следующим шагом.",
+        200,
+    )
 
-    logging.info("Telegram bot is starting...")
-    app.run_polling()
 
-if __name__ == "__main__":
-    main()
+@app.get("/health")
+def health():
+    return jsonify(
+        {
+            "status": "ok",
+            "service": "luka-chest-bot",
+        }
+    )
+
+
+@app.post("/telegram/webhook")
+def telegram_webhook():
+    update = request.get_json(silent=True) or {}
+    message = update.get("message") or {}
+    text = message.get("text", "")
+    chat = message.get("chat") or {}
+    user = message.get("from") or {}
+
+    if chat.get("id") and text.startswith("/start"):
+        send_start_message(
+            chat_id=chat["id"],
+            first_name=user.get("first_name", ""),
+        )
+
+    return jsonify({"ok": True})
+
+
+@app.get("/api/chests")
+def get_chests():
+    with get_db() as connection:
+        rows = connection.execute(
+            """
+            SELECT number, image_path, prize
+            FROM chests
+            ORDER BY number
+            """
+        ).fetchall()
+
+    return jsonify(
+        [
+            {
+                "number": row["number"],
+                "image_path": row["image_path"],
+                "prize": row["prize"],
+            }
+            for row in rows
+        ]
+    )
+
+
+init_db()
+set_webhook()
