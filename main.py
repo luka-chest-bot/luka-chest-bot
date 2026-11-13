@@ -2,6 +2,12 @@ import os
 import random
 import sqlite3
 import logging
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO,
+)
+
+logger = logging.getLogger(__name__)
 from collections import Counter
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
