@@ -188,10 +188,7 @@ def start_web_server():
         daemon=True,
     ).start()
 
-def main():
-    if os.path.exists("chests.db"):
-    os.remove("chests.db")
-    
+def main():    
     init_db()
     start_web_server()
 
