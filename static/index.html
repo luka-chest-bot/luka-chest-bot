@@ -3,10 +3,138 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Выбор сундука</title>
+
+    <title>Сундуки</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            padding: 24px 16px;
+            font-family: Arial, sans-serif;
+            color: #ffffff;
+            background: #101827;
+            text-align: center;
+        }
+
+        h1 {
+            margin: 0 0 8px;
+            font-size: 30px;
+        }
+
+        p {
+            margin: 0 0 24px;
+            color: #aebbd0;
+        }
+
+        .chests {
+            width: min(100%, 600px);
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
+        }
+
+        .chest {
+            aspect-ratio: 1;
+            border: 2px solid #f5b942;
+            border-radius: 8px;
+            background: #263652;
+            color: #ffffff;
+            font-size: 24px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.15s, background 0.15s;
+        }
+
+        .chest:hover {
+            background: #344b72;
+            transform: translateY(-2px);
+        }
+
+        .chest.selected {
+            background: #d8911e;
+            border-color: #ffe09a;
+        }
+
+        .status {
+            min-height: 24px;
+            margin-top: 24px;
+            color: #ffe09a;
+            font-weight: bold;
+        }
+
+        @media (max-width: 420px) {
+            .chests {
+                gap: 7px;
+            }
+
+            .chest {
+                font-size: 18px;
+            }
+        }
+    </style>
 </head>
 <body>
     <h1>Выберите сундук</h1>
-    <p>Страница работает.</p>
+    <p>Можно выбрать только один сундук</p>
+
+    <main id="chests" class="chests"></main>
+
+    <div id="status" class="status"></div>
+
+    <script>
+        const chestsElement = document.getElementById("chests");
+        const statusElement = document.getElementById("status");
+
+        let selectedChest = null;
+
+        async function loadChests() {
+            try {
+                const response = await fetch("/api/chests");
+
+                if (!response.ok) {
+                    throw new Error("Ошибка загрузки сундуков");
+                }
+
+                const chests = await response.json();
+
+                chestsElement.innerHTML = "";
+
+                chests.forEach((chest) => {
+                    const button = document.createElement("button");
+
+                    button.className = "chest";
+                    button.type = "button";
+                    button.textContent = "🎁";
+                    button.title = XXXINLINECODEXXX5XXXINLINECODEXXX;
+
+                    button.addEventListener("click", () => {
+                        if (selectedChest !== null) {
+                            return;
+                        }
+
+                        selectedChest = chest.number;
+                        button.classList.add("selected");
+
+                        statusElement.textContent =
+                            XXXINLINECODEXXX6XXXINLINECODEXXX;
+                    });
+
+                    chestsElement.appendChild(button);
+                });
+            } catch (error) {
+                statusElement.textContent =
+                    "Не удалось загрузить сундуки";
+                console.error(error);
+            }
+        }
+
+        loadChests();
+    </script>
 </body>
 </html>
