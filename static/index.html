@@ -93,23 +93,34 @@
             });
         }
 
-        async function openChest(chestNumber) {
-            statusElement.textContent = "Открываем...";
-            try {
-                const response = await fetch("/api/open_chest", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ initData: initData, chest_number: chestNumber })
-                });
-                const data = await response.json();
-                if (!response.ok) { throw new Error(data.error || "Ошибка открытия"); }
-                statusElement.textContent = `Вы выиграли: ${data.prize}`;
-                await loadChests();
-            } catch (error) {
-                statusElement.textContent = "Ошибка: " + error.message;
-                console.error(error);
-            }
-        }
+async function openChest(chestNumber) {
+    statusElement.textContent = "Открываем...";
+    try {
+        const response = await fetch("/api/open_chest", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ initData: initData, chest_number: chestNumber })
+        });
+        const data = await response.json();
+        if (!response.ok) { throw new Error(data.error || "Ошибка открытия"); }
+        
+        // Показываем красивый системный алерт от Telegram
+        tg.showAlert(`Вы выиграли: ${data.prize}`);
+        
+        // Оставляем текст внизу
+        statusElement.textContent = `Ваш приз: ${data.prize}`;
+        
+        // Обновляем сундуки (они заблокируются)
+        await loadChests();
+        
+        // Возвращаем текст обратно, так как loadChests его стер
+        statusElement.textContent = `Ваш приз: ${data.prize}`;
+
+    } catch (error) {
+        statusElement.textContent = "Ошибка: " + error.message;
+        console.error(error);
+    }
+}
 
         loadChests();
     </script>
