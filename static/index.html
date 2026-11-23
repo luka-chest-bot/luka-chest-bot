@@ -7,31 +7,17 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         * { box-sizing: border-box; }
-        body {
-            margin: 0; min-height: 100vh; padding: 24px 16px;
-            font-family: Arial, sans-serif; color: #fff;
-            background: #101827; text-align: center;
-        }
+        body { margin: 0; min-height: 100vh; padding: 24px 16px; font-family: Arial, sans-serif; color: #fff; background: #101827; text-align: center; }
         h1 { margin: 0 0 8px; font-size: 30px; }
         p { margin: 0 0 24px; color: #aebbd0; }
-        .chests {
-            width: min(100%, 600px); margin: 0 auto;
-            display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px;
-        }
-        .chest {
-            aspect-ratio: 1; border: 2px solid #f5b942; border-radius: 8px;
-            background: #263652; color: #fff; font-size: 24px;
-            font-weight: bold; cursor: pointer;
-            transition: transform 0.15s, background 0.15s;
-        }
+        .chests { width: min(100%, 600px); margin: 0 auto; display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+        .chest { aspect-ratio: 1; border: 2px solid #f5b942; border-radius: 8px; background: #263652; color: #fff; font-size: 24px; font-weight: bold; cursor: pointer; transition: transform 0.15s, background 0.15s; }
         .chest:hover { background: #344b72; transform: translateY(-2px); }
         .chest.selected { background: #d8911e; border-color: #ffe09a; }
         .chest:disabled { opacity: 0.5; cursor: not-allowed; }
-        .status { min-height: 24px; margin-top: 24px; color: #ffe09a; font-weight: bold; font-size: 14px;}
-        @media (max-width: 420px) {
-            .chests { gap: 7px; }
-            .chest { font-size: 18px; }
-        }
+        .status { min-height: 24px; margin-top: 24px; color: #ffe09a; font-weight: bold; font-size: 14px; }
+        .debug-panel { margin-top: 20px; padding: 10px; background: rgba(0,0,0,0.3); border: 1px solid #334; border-radius: 8px; text-align: left; font-size: 12px; color: #8899bb; word-break: break-all; }
+        @media (max-width: 420px) { .chests { gap: 7px; } .chest { font-size: 18px; } }
     </style>
 </head>
 <body>
@@ -40,8 +26,20 @@
 
     <main id="chests" class="chests"></main>
     <div id="status" class="status"></div>
+    <!-- Блок для отладочной информации -->
+    <div id="debug-panel" class="debug-panel" style="display: none;"></div>
 
     <script>
+        // ---- НАЧАЛО ОТЛАДОЧНОГО БЛОКА ----
+        const debugPanel = document.getElementById('debug-panel');
+        let debugInfo = [];
+        function showDebug(text) {
+            debugInfo.push(text);
+            debugPanel.style.display = 'block';
+            debugPanel.innerHTML = '<b>Отладка:</b><br>' + debugInfo.join('<br>');
+        }
+        // ---- КОНЕЦ ОТЛАДОЧНОГО БЛОКА ----
+
         const tg = window.Telegram.WebApp;
         tg.ready();
         tg.expand();
@@ -52,24 +50,25 @@
         let selectedChest = null;
         let chestsData = [];
 
+        // Отладочный вывод
+        showDebug('Платформа: ' + (tg.platform || 'не определена'));
+        showDebug('Длина initData: ' + (initData ? initData.length : 0));
+
         async function loadChests() {
-            // Проверка: если Telegram не передал данные
             if (!initData) {
                 statusElement.textContent = "Ошибка: Telegram не передал данные. Откройте игру через кнопку в боте (напишите /start).";
+                showDebug('initData пустой. Проверьте настройки бота.');
                 return;
             }
-
             try {
                 const response = await fetch(`/api/chests?initData=${encodeURIComponent(initData)}`);
-                if (!response.ok) {
-                    const err = await response.json();
-                    throw new Error(err.error || "Ошибка загрузки");
-                }
+                if (!response.ok) { const err = await response.json(); throw new Error(err.error || "Ошибка загрузки"); }
                 chestsData = await response.json();
                 renderChests();
-                statusElement.textContent = ""; // Очищаем ошибки при успехе
+                statusElement.textContent = "";
             } catch (error) {
                 statusElement.textContent = "Не удалось загрузить сундуки: " + error.message;
+                showDebug('Ошибка fetch: ' + error.message);
                 console.error(error);
             }
         }
@@ -77,26 +76,19 @@
         function renderChests() {
             chestsElement.innerHTML = "";
             const alreadyOpened = chestsData.some(c => c.is_opened);
-
             chestsData.forEach((chest) => {
                 const btn = document.createElement("button");
                 btn.className = "chest";
                 btn.type = "button";
                 btn.textContent = chest.is_opened ? "📦" : "🎁";
                 btn.disabled = alreadyOpened || chest.is_opened;
-
-                if (chest.is_opened) {
-                    btn.classList.add("selected");
-                    btn.title = chest.prize || "";
-                }
-
+                if (chest.is_opened) { btn.classList.add("selected"); btn.title = chest.prize || ""; }
                 btn.addEventListener("click", () => {
                     if (selectedChest !== null || alreadyOpened) return;
                     selectedChest = chest.number;
                     btn.classList.add("selected");
                     openChest(chest.number);
                 });
-
                 chestsElement.appendChild(btn);
             });
         }
@@ -107,15 +99,10 @@
                 const response = await fetch("/api/open_chest", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        initData: initData,
-                        chest_number: chestNumber
-                    })
+                    body: JSON.stringify({ initData: initData, chest_number: chestNumber })
                 });
                 const data = await response.json();
-                if (!response.ok) {
-                    throw new Error(data.error || "Ошибка открытия");
-                }
+                if (!response.ok) { throw new Error(data.error || "Ошибка открытия"); }
                 statusElement.textContent = `Вы выиграли: ${data.prize}`;
                 await loadChests();
             } catch (error) {
