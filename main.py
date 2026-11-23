@@ -165,14 +165,19 @@ def open_chest():
     init_data = data.get("initData", "")
     chest_number = data.get("chest_number")
 
-    # Извлекаем telegram_id (упрощённо)
     telegram_id = None
+    username = "нет_юзернейма"
+    first_name = "Пользователь"
+
+    # Извлекаем telegram_id, username и имя
     try:
         from urllib.parse import parse_qs
         parsed = parse_qs(init_data)
         user_json = parsed.get("user", ["{}"])[0]
-        user = json.loads(user_json)
-        telegram_id = user.get("id")
+        user_data = json.loads(user_json)
+        telegram_id = user_data.get("id")
+        username = user_data.get("username", "нет_юзернейма")
+        first_name = user_data.get("first_name", "Пользователь")
     except Exception:
         pass
 
@@ -187,7 +192,6 @@ def open_chest():
     if user and user["is_blocked"]:
         return jsonify({"error": "Вы заблокированы"}), 403
 
-    # Проверяем, не открыт ли уже какой-то сундук
     with get_db() as conn:
         already = conn.execute(
             "SELECT chest_number FROM user_chests WHERE telegram_id = ? AND is_opened = 1",
@@ -196,30 +200,27 @@ def open_chest():
         if already:
             return jsonify({"error": "Вы уже открыли сундук"}), 400
 
-        # Помечаем выбранный сундук как открытый
         conn.execute(
             "UPDATE user_chests SET is_opened = 1 WHERE telegram_id = ? AND chest_number = ?",
             (telegram_id, chest_number)
         )
-        # Ставим флаг has_opened в users
         conn.execute(
             "INSERT INTO users (telegram_id, has_opened) VALUES (?, 1) ON CONFLICT(telegram_id) DO UPDATE SET has_opened = 1",
             (telegram_id,)
         )
         conn.commit()
 
-        # Получаем приз
         row = conn.execute(
             "SELECT prize FROM user_chests WHERE telegram_id = ? AND chest_number = ?",
             (telegram_id, chest_number)
         ).fetchone()
         prize = row["prize"] if row else "неизвестный приз"
 
-    # Уведомление админу
+    # Уведомление админу с юзернеймом
     if ADMIN_ID:
         send_message(
             ADMIN_ID,
-            f"🎁 Пользователь {telegram_id} открыл сундук №{chest_number} и выиграл: {prize}"
+            f"🎁 {first_name} (@{username}, ID: {telegram_id}) открыл сундук №{chest_number} и выиграл: {prize}"
         )
 
     return jsonify({"prize": prize})
