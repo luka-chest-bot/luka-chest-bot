@@ -27,7 +27,7 @@
         .chest:hover { background: #344b72; transform: translateY(-2px); }
         .chest.selected { background: #d8911e; border-color: #ffe09a; }
         .chest:disabled { opacity: 0.5; cursor: not-allowed; }
-        .status { min-height: 24px; margin-top: 24px; color: #ffe09a; font-weight: bold; }
+        .status { min-height: 24px; margin-top: 24px; color: #ffe09a; font-weight: bold; font-size: 14px;}
         @media (max-width: 420px) {
             .chests { gap: 7px; }
             .chest { font-size: 18px; }
@@ -53,6 +53,12 @@
         let chestsData = [];
 
         async function loadChests() {
+            // Проверка: если Telegram не передал данные
+            if (!initData) {
+                statusElement.textContent = "Ошибка: Telegram не передал данные. Откройте игру через кнопку в боте (напишите /start).";
+                return;
+            }
+
             try {
                 const response = await fetch(`/api/chests?initData=${encodeURIComponent(initData)}`);
                 if (!response.ok) {
@@ -61,6 +67,7 @@
                 }
                 chestsData = await response.json();
                 renderChests();
+                statusElement.textContent = ""; // Очищаем ошибки при успехе
             } catch (error) {
                 statusElement.textContent = "Не удалось загрузить сундуки: " + error.message;
                 console.error(error);
@@ -110,7 +117,6 @@
                     throw new Error(data.error || "Ошибка открытия");
                 }
                 statusElement.textContent = `Вы выиграли: ${data.prize}`;
-                // Перезагружаем состояние
                 await loadChests();
             } catch (error) {
                 statusElement.textContent = "Ошибка: " + error.message;
